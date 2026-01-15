@@ -27,6 +27,12 @@ go.work
 *.swo
 *~
 
+# other
+.spec-workflow/*
+todo/*
+CLAUDE.md
+.serena/*
+
 # Environment
 .env
 .env.local

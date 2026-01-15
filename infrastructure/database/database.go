@@ -9,7 +9,7 @@ import (
 	"github.com/drama-generator/backend/domain/models"
 	"github.com/drama-generator/backend/pkg/config"
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
+	sqlite "github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
