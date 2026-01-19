@@ -32,5 +32,9 @@ export const aiAPI = {
 
   testConnection(data: TestConnectionRequest) {
     return request.post('/ai-configs/test', data)
+  },
+
+  listModels(data: { base_url: string; api_key: string; provider: string }) {
+    return request.post<{ models: string[] }>('/ai-configs/list-models', data)
   }
 }

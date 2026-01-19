@@ -225,3 +225,67 @@ func (c *OpenAIClient) TestConnection() error {
 	}
 	return err
 }
+
+// ModelsResponse 定义模型列表响应结构
+type ModelsResponse struct {
+	Object string `json:"object"`
+	Data   []struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		Created int64  `json:"created"`
+		OwnedBy string `json:"owned_by"`
+	} `json:"data"`
+}
+
+// ListModels 获取可用模型列表
+func (c *OpenAIClient) ListModels() ([]string, error) {
+	url := c.BaseURL + "/models"
+
+	fmt.Printf("OpenAI: ListModels called, requesting: %s\n", url)
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("OpenAI: Failed to create request: %v\n", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		fmt.Printf("OpenAI: HTTP request failed: %v\n", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("OpenAI: Received response with status: %d\n", resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("OpenAI: Failed to read response body: %v\n", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("OpenAI: API error (status %d): %s\n", resp.StatusCode, string(body))
+		var errResp ErrorResponse
+		if err := json.Unmarshal(body, &errResp); err != nil {
+			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("API error: %s", errResp.Error.Message)
+	}
+
+	var modelsResp ModelsResponse
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		fmt.Printf("OpenAI: Failed to parse response: %v\n", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	models := make([]string, 0, len(modelsResp.Data))
+	for _, model := range modelsResp.Data {
+		models = append(models, model.ID)
+	}
+
+	fmt.Printf("OpenAI: Successfully retrieved %d models\n", len(models))
+	return models, nil
+}

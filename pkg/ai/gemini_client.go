@@ -193,3 +193,74 @@ func (c *GeminiClient) TestConnection() error {
 	}
 	return err
 }
+
+// GeminiModelsResponse 定义 Gemini 模型列表响应结构
+type GeminiModelsResponse struct {
+	Models []struct {
+		Name                       string   `json:"name"`
+		BaseModelID                string   `json:"baseModelId"`
+		Version                    string   `json:"version"`
+		DisplayName                string   `json:"displayName"`
+		Description                string   `json:"description"`
+		InputTokenLimit            int      `json:"inputTokenLimit"`
+		OutputTokenLimit           int      `json:"outputTokenLimit"`
+		SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
+		Temperature                float64  `json:"temperature"`
+		TopP                       float64  `json:"topP"`
+		TopK                       int      `json:"topK"`
+	} `json:"models"`
+}
+
+// ListModels 获取可用模型列表
+func (c *GeminiClient) ListModels() ([]string, error) {
+	url := fmt.Sprintf("%s/v1beta/models?key=%s", c.BaseURL, c.APIKey)
+
+	// 打印请求信息（隐藏 API Key）
+	safeURL := strings.Replace(url, c.APIKey, "***", 1)
+	fmt.Printf("Gemini: ListModels called, requesting: %s\n", safeURL)
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("Gemini: Failed to create request: %v\n", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		fmt.Printf("Gemini: HTTP request failed: %v\n", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("Gemini: Received response with status: %d\n", resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Gemini: Failed to read response body: %v\n", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Gemini: API error (status %d): %s\n", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var modelsResp GeminiModelsResponse
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		fmt.Printf("Gemini: Failed to parse response: %v\n", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	models := make([]string, 0, len(modelsResp.Models))
+	for _, model := range modelsResp.Models {
+		// 提取模型名称（去掉 "models/" 前缀）
+		modelName := model.Name
+		if strings.HasPrefix(modelName, "models/") {
+			modelName = strings.TrimPrefix(modelName, "models/")
+		}
+		models = append(models, modelName)
+	}
+
+	fmt.Printf("Gemini: Successfully retrieved %d models\n", len(models))
+	return models, nil
+}

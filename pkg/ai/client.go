@@ -4,4 +4,5 @@ package ai
 type AIClient interface {
 	GenerateText(prompt string, systemPrompt string, options ...func(*ChatCompletionRequest)) (string, error)
 	TestConnection() error
+	ListModels() ([]string, error)
 }

@@ -173,6 +173,14 @@
               :value="model"
             />
           </el-select>
+          <el-button
+            @click="fetchModels"
+            :loading="fetchingModels"
+            :disabled="!form.base_url || !form.api_key || !form.provider"
+            style="margin-top: 8px; width: 100%"
+          >
+            刷新模型列表
+          </el-button>
           <div class="form-tip">{{ $t('aiConfig.form.modelTip') }}</div>
         </el-form-item>
 
@@ -252,6 +260,8 @@ const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const testing = ref(false)
+const fetchingModels = ref(false)
+const dynamicModels = ref<string[]>([])
 const quickSetupVisible = ref(false)
 const quickSetupApiKey = ref('')
 const quickSetupLoading = ref(false)
@@ -349,6 +359,11 @@ const availableProviders = computed(() => {
 })
 
 const availableModels = computed(() => {
+  // 如果有动态获取的模型,优先使用动态模型
+  if (dynamicModels.value.length > 0) {
+    return dynamicModels.value
+  }
+  // 否则使用预设的模型列表
   if (!form.provider) return []
   const provider = availableProviders.value.find(p => p.id === form.provider)
   return provider?.models || []
@@ -581,7 +596,9 @@ const handleTabChange = (tabName: string | number) => {
 }
 
 const handleProviderChange = () => {
+  // 切换厂商时清空已选模型和动态模型列表
   form.model = []
+  dynamicModels.value = []
   
   if (form.provider === 'gemini' || form.provider === 'google') {
     form.base_url = 'https://api.chatfire.site'
@@ -591,6 +608,31 @@ const handleProviderChange = () => {
   
   if (!isEdit.value) {
     form.name = generateConfigName(form.provider, form.service_type)
+  }
+}
+
+const fetchModels = async () => {
+  if (!form.base_url || !form.api_key || !form.provider) {
+    ElMessage.warning('请先填写 Base URL、API Key 和厂商')
+    return
+  }
+
+  fetchingModels.value = true
+  try {
+    const response = await aiAPI.listModels({
+      base_url: form.base_url,
+      api_key: form.api_key,
+      provider: form.provider
+    })
+
+    dynamicModels.value = response.models
+    ElMessage.success(`成功获取 ${response.models.length} 个模型`)
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取模型列表失败')
+    // 获取失败时清空动态模型列表,回退到预设列表
+    dynamicModels.value = []
+  } finally {
+    fetchingModels.value = false
   }
 }
 
@@ -606,6 +648,7 @@ const resetForm = () => {
     priority: 0,
     is_active: true
   })
+  dynamicModels.value = []  // 清空动态模型列表
   formRef.value?.resetFields()
 }
 

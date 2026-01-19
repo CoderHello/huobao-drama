@@ -101,28 +101,6 @@
           <div class="form-tip">{{ $t('aiConfig.form.priorityTip') }}</div>
         </el-form-item>
 
-        <el-form-item :label="$t('aiConfig.form.model')" prop="model">
-          <el-select 
-            v-model="form.model" 
-            :placeholder="$t('aiConfig.form.modelPlaceholder')"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            collapse-tags
-            collapse-tags-tooltip
-            style="width: 100%"
-          >
-            <el-option
-              v-for="model in availableModels"
-              :key="model"
-              :label="model"
-              :value="model"
-            />
-          </el-select>
-          <div class="form-tip">{{ $t('aiConfig.form.modelTip') }}</div>
-        </el-form-item>
-
         <el-form-item :label="$t('aiConfig.form.baseUrl')" prop="base_url">
           <el-input v-model="form.base_url" :placeholder="$t('aiConfig.form.baseUrlPlaceholder')" />
           <div class="form-tip">
@@ -140,6 +118,36 @@
             :placeholder="$t('aiConfig.form.apiKeyPlaceholder')"
           />
           <div class="form-tip">{{ $t('aiConfig.form.apiKeyTip') }}</div>
+        </el-form-item>
+
+        <el-form-item :label="$t('aiConfig.form.model')" prop="model">
+          <el-select
+            v-model="form.model"
+            :placeholder="$t('aiConfig.form.modelPlaceholder')"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            collapse-tags
+            collapse-tags-tooltip
+            style="width: 100%"
+          >
+            <el-option
+              v-for="model in availableModels"
+              :key="model"
+              :label="model"
+              :value="model"
+            />
+          </el-select>
+          <el-button
+            @click="fetchModels"
+            :loading="fetchingModels"
+            :disabled="!form.base_url || !form.api_key || !form.provider"
+            style="margin-top: 8px; width: 100%"
+          >
+            刷新模型列表
+          </el-button>
+          <div class="form-tip">{{ $t('aiConfig.form.modelTip') }}</div>
         </el-form-item>
 
         <el-form-item v-if="isEdit" :label="$t('aiConfig.form.isActive')">
@@ -163,7 +171,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, ArrowLeft } from '@element-plus/icons-vue'
+import { Plus, ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { aiAPI } from '@/api/ai'
 import { PageHeader } from '@/components/common'
 import type { AIServiceConfig, AIServiceType, CreateAIConfigRequest, UpdateAIConfigRequest } from '@/types/ai'
@@ -180,6 +188,8 @@ const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const testing = ref(false)
+const fetchingModels = ref(false)
+const dynamicModels = ref<string[]>([])
 
 const form = reactive<CreateAIConfigRequest & { is_active?: boolean, provider?: string }>({
   service_type: 'text',
@@ -288,6 +298,12 @@ const availableProviders = computed(() => {
 
 // 当前可用的模型列表
 const availableModels = computed(() => {
+  // 如果有动态获取的模型,优先使用动态模型
+  if (dynamicModels.value.length > 0) {
+    return dynamicModels.value
+  }
+
+  // 否则使用预设的模型列表
   if (!form.provider) return []
   const provider = availableProviders.value.find(p => p.id === form.provider)
   return provider?.models || []
@@ -534,9 +550,10 @@ const handleTabChange = (tabName: string | number) => {
 }
 
 const handleProviderChange = () => {
-  // 切换厂商时清空已选模型
+  // 切换厂商时清空已选模型和动态模型列表
   form.model = []
-  
+  dynamicModels.value = []
+
   // 根据厂商自动设置默认 base_url
   if (form.provider === 'gemini' || form.provider === 'google') {
     form.base_url = 'https://api.chatfire.site'
@@ -544,10 +561,35 @@ const handleProviderChange = () => {
     // openai, chatfire 等其他厂商
     form.base_url = 'https://api.chatfire.site/v1'
   }
-  
+
   // 仅在新建配置时自动更新名称
   if (!isEdit.value) {
     form.name = generateConfigName(form.provider, form.service_type)
+  }
+}
+
+const fetchModels = async () => {
+  if (!form.base_url || !form.api_key || !form.provider) {
+    ElMessage.warning('请先填写 Base URL、API Key 和厂商')
+    return
+  }
+
+  fetchingModels.value = true
+  try {
+    const response = await aiAPI.listModels({
+      base_url: form.base_url,
+      api_key: form.api_key,
+      provider: form.provider
+    })
+
+    dynamicModels.value = response.models
+    ElMessage.success(`成功获取 ${response.models.length} 个模型`)
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取模型列表失败')
+    // 获取失败时清空动态模型列表,回退到预设列表
+    dynamicModels.value = []
+  } finally {
+    fetchingModels.value = false
   }
 }
 
@@ -578,6 +620,7 @@ const resetForm = () => {
     priority: 0,
     is_active: true
   })
+  dynamicModels.value = []  // 清空动态模型列表
   formRef.value?.resetFields()
 }
 

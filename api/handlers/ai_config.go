@@ -134,3 +134,19 @@ func (h *AIConfigHandler) TestConnection(c *gin.Context) {
 
 	response.Success(c, gin.H{"message": "连接测试成功"})
 }
+
+func (h *AIConfigHandler) ListModels(c *gin.Context) {
+	var req services.ListModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	models, err := h.aiService.ListModels(&req)
+	if err != nil {
+		response.BadRequest(c, "获取模型列表失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"models": models})
+}

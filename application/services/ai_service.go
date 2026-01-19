@@ -396,3 +396,42 @@ func (s *AIService) GenerateText(prompt string, systemPrompt string, options ...
 
 	return client.GenerateText(prompt, systemPrompt, options...)
 }
+
+// ListModelsRequest 定义获取模型列表的请求
+type ListModelsRequest struct {
+	BaseURL  string `json:"base_url" binding:"required,url"`
+	APIKey   string `json:"api_key" binding:"required"`
+	Provider string `json:"provider" binding:"required"`
+}
+
+// ListModels 根据 BaseURL、APIKey 和 Provider 获取可用模型列表
+func (s *AIService) ListModels(req *ListModelsRequest) ([]string, error) {
+	s.log.Infow("ListModels called", "baseURL", req.BaseURL, "provider", req.Provider)
+
+	// 根据 provider 参数选择客户端
+	var client ai.AIClient
+
+	switch req.Provider {
+	case "gemini", "google":
+		// Gemini
+		s.log.Infow("Using Gemini client for ListModels", "baseURL", req.BaseURL)
+		client = ai.NewGeminiClient(req.BaseURL, req.APIKey, "", "")
+	case "openai", "chatfire":
+		// OpenAI 格式（包括 chatfire 等）
+		s.log.Infow("Using OpenAI-compatible client for ListModels", "baseURL", req.BaseURL, "provider", req.Provider)
+		client = ai.NewOpenAIClient(req.BaseURL, req.APIKey, "", "")
+	default:
+		// 默认使用 OpenAI 格式
+		s.log.Infow("Using default OpenAI-compatible client for ListModels", "baseURL", req.BaseURL)
+		client = ai.NewOpenAIClient(req.BaseURL, req.APIKey, "", "")
+	}
+
+	models, err := client.ListModels()
+	if err != nil {
+		s.log.Errorw("ListModels failed", "error", err)
+		return nil, err
+	}
+
+	s.log.Infow("ListModels succeeded", "count", len(models))
+	return models, nil
+}
